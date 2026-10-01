@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  TENANT_ADMIN
+  RECEPTIONIST
+  PROFESSIONAL
+  CLIENT
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Tenant {
+  id                String  @id @default(uuid())
+  name              String
+  slug              String  @unique
+  logoUrl           String?
+  configuracionDias Json? // Configuración de días laborables
+
+  users         User[]
+  services      Service[]
+  professionals Professional[]
+  appointments  Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id    String @id @default(uuid()) // Supabase Auth User ID
+  email String @unique
+  role  Role   @default(CLIENT)
+
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  professional Professional? // Relación si el usuario es un profesional
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Service {
+  id              String  @id @default(uuid())
+  name            String
+  description     String?
+  durationMinutes Int
+  price           Decimal? @db.Decimal(10, 2)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  appointments Appointment[]
+  professionals ProfessionalService[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Professional {
+  id   String @id @default(uuid())
+  name String
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  schedules    Schedule[]
+  timeOffs     TimeOff[]
+  appointments Appointment[]
+  services     ProfessionalService[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProfessionalService {
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  customDurationMinutes Int?
+  customPrice           Decimal? @db.Decimal(10, 2)
+
+  @@id([professionalId, serviceId])
+}
+
+model Schedule {
+  id             String       @id @default(uuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  dayOfWeek Int // 0 (Domingo) a 6 (Sábado)
+  startTime String // ej. "09:00"
+  endTime   String // ej. "18:00"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TimeOff {
+  id             String       @id @default(uuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Appointment {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  startTime DateTime
+  endTime   DateTime
+
+  clientName  String
+  clientEmail String?
+  clientPhone String?
+
+  status AppointmentStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
